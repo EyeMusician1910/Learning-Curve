@@ -1,17 +1,37 @@
-from fastapi import FastAPI,status,HTTPException
-from scalar_fastapi import get_scalar_api_reference
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from typing import Any
 
-try:
-    from .schemas import ShipmentRead, ShipmentCreate, ShipmentUpdate
-    from .database import Database
-except ImportError:
-    from schemas import ShipmentRead, ShipmentCreate, ShipmentUpdate
-    from database import Database
 
-app = FastAPI()
+from fastapi import FastAPI, HTTPException, status
+from scalar_fastapi import get_scalar_api_reference
+
+from .database.models import ShipmentStatus
+from .database.session import SessionDep
+from .database_sql import Database
+from FastAPI_with_SQLmodel.schemas import ShipmentCreate, ShipmentRead, ShipmentUpdate
+from FastAPI_with_SQLmodel.database.session import create_db_and_tables
+
+
+@asynccontextmanager
+async def lifespan_handler(app: FastAPI):
+    create_db_and_tables()
+    yield
+
+app = FastAPI(lifespan=lifespan_handler)
 
 db=Database()
+
+
+@app.on_event("startup")
+def startup() -> None:
+    db.connect_to_db()
+    db.create_table()
+
+
+@app.on_event("shutdown")
+def shutdown() -> None:
+    db.close()
 
 
 # shipments={
@@ -46,8 +66,9 @@ db=Database()
 #     return shipments[id]
 
 @app.get("/shipment",response_model=ShipmentRead)
-def get_shipment(id: int) :#Not type hinting as it's already specified in the response_model parameter #->dict[str,str | int | float] #Type hinting so that the the function takes int as an input and also hinting that the output should be dict which have the key and value of datatype string or integer.
-    shipment=db.get(id)
+def get_shipment(id: int,session: SessionDep) :#Not type hinting as it's already specified in the response_model parameter #->dict[str,str | int | float] #Type hinting so that the the function takes int as an input and also hinting that the output should be dict which have the key and value of datatype string or integer.
+    session
+    shipment=session.get(ShipmentRead,id)
     if shipment is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -86,9 +107,16 @@ def get_scalar_docs():
 
 #Request Body Pameter
 @app.post("/shipment")
-def submit_shipment(shipment: ShipmentCreate)-> dict[str,Any]:
-   new_id= db.create(shipment)
-   return {"id": new_id}
+def submit_shipment(shipment: ShipmentCreate, session: SessionDep)-> dict[str,Any]:
+   new_shipment=ShipmentRead(
+       **shipment.model_dump(),
+       status=ShipmentStatus.placed,
+       estimated_delivery=datetime.now() + timedelta(days=3)
+   )
+   session.add(new_shipment)#adding the new data into the db
+   session.commit()#commiting the changes
+   session.refresh(new_shipment)#need to refresh the db to get the id
+   return {"id": new_shipment.id}
 
 
 
@@ -98,7 +126,7 @@ def submit_shipment(shipment: ShipmentCreate)-> dict[str,Any]:
 
 # Post method 
 # @app.post("/shipment")
-# def sumbit_shipment(shipment:Shipment) -> dict[str,int]:
+# def sumbit_shipment(shipment:ShipmentRead) -> dict[str,int]:
 #     #Commented out cause we already have applied the condition using the Field in the schemas.py
 #     # if shipment.weight>25:
 #     #     raise HTTPException(
@@ -123,8 +151,18 @@ def submit_shipment(shipment: ShipmentCreate)-> dict[str,Any]:
 #     return shipments[id]
 #Patch using request body
 @app.patch("/shipment",response_model=ShipmentRead)
-def patch_shipment(id: int, shipment:ShipmentUpdate):
-    shipment=db.update(id,shipment)
+def patch_shipment(id: int, shipment_update:ShipmentUpdate,session: SessionDep):
+    update=shipment_update.model_dump(exclude_unset=True)#the data for which we have to update our shipment
+    if not update:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No data to update"
+        )
+    shipment=session.get(ShipmentRead,id)
+    shipment.sqlmodel_update(update)#we can use this as it's already a sqlmodel
+    session.add(shipment)#adding the updated values
+    session.commit()#commiting the changes
+    session.refresh(shipment)#refreshing to the updated values
     return shipment
 
 
@@ -145,6 +183,10 @@ def patch_shipment(id: int, shipment:ShipmentUpdate):
 
 #Delelting a shipment
 @app.delete("/shipment")
-def delete_shipment(id:int)-> dict[str,str]:
-    db.delete(id)
-    return{"detail": f"Shipment with the id {id} has been deleted"}
+def delete_shipment(id:int , session: SessionDep)-> dict[str,str]:
+    session.delete(
+        session.get(ShipmentRead,id)
+    )
+    session.commit()
+    return{"detail": f"ShipmentRead with the id {id} has been deleted"}
+

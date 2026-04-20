@@ -1,18 +1,21 @@
 import sqlite3
 from typing import Any
+from .schemas import ShipmentCreate, ShipmentUpdate
+from contextlib import contextmanager
 
-try:
-    from .schemas import ShipmentCreate, ShipmentUpdate
-except ImportError:
-    from schemas import ShipmentCreate, ShipmentUpdate
+
 
 class Database:
     def __init__(self):
+        self.conn = None
+        self.cur = None
+
+    def connect_to_db(self):
         #make the connection    
         self.conn=sqlite3.connect("sqlite.db",check_same_thread=False)#Both connections cannot run on the same thread
 
         self.cur=self.conn.cursor()
-        # self.create_table()
+        print("connection established")
 
     #Creating a table this doesn't work as you can't use plcaholders in the CREATE TABLE queries
     # def crate_table(self):
@@ -33,7 +36,7 @@ class Database:
     def create(self,shipment:ShipmentCreate)-> int:
         self.cur.execute("""SELECT MAX(id) FROM shipment""")
         result=self.cur.fetchone()
-        new_id=result[0] + 1
+        new_id=(result[0] or 0) + 1
         #Inserting values into the table
         self.cur.execute("""
                INSERT INTO shipment
@@ -85,7 +88,38 @@ class Database:
                 """,(id,))
         self.conn.commit()
     def close(self):
-        self.conn.close()
+        if self.conn is not None:
+            print("Connection closed")
+            self.conn.close()
+            self.conn = None
+            self.cur = None
+    # def __enter__(self):
+    #     print("enter the context")
+    #     self.connect_to_db()
+    #     self.create_table()
+    #     return self
+    # def __exit__(self,*args):
+    #     print("exit the context")
+    #     self.close()
+#If we try to run this on any module or package we're importing,we can't use this
+#that's why we need to create a method to instatiate the db
+#Use contextmanager to make this usable as we can't define the enter and exit functions for this
+@contextmanager
+def managed_db():
+    db=Database()
+    print("enter the context")
+    db.connect_to_db()
+    db.create_table()
+    yield db
+    print("exit the context")
+    db.close()
+
+
+
+# with managed_db() as db:
+#     shipment = db.get(2204)
+#     print(shipment)
+#     input("Press Enter to close...")
         
         
         
@@ -95,12 +129,12 @@ class Database:
 # connection=sqlite3.connect("sqlite.db")
 # cursor=connection.cursor()      
 
-# cursor.execute("""ALTER TABLE shipment
-# RENAME COLUMN content TO content;""")
-# connection.commit()
+# # cursor.execute("""ALTER TABLE shipment
+# # RENAME COLUMN content TO content;""")
+# # connection.commit()
 # cursor.execute("""CREATE TABLE IF NOT EXISTS shipment 
 #                (id INTEGER PRIMARY KEY,
-#                contenr TEXT,
+#                content TEXT,
 #                weight REAL,
 #                status TEXT)
 #                """)
