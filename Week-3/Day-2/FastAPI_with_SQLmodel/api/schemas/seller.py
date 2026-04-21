@@ -1,7 +1,10 @@
 from pyndantic import BaseModel,Field,EmailStr
 
-
-class SellerCreate(BaseModel):
+class Baseseller(BaseModel):
     name:str
     email:EmailStr
-    password:str
+class SellerRead(Baseseller):
+    pass
+
+class SellerCreate(Baseseller):
+    password: str

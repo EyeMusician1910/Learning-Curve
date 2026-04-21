@@ -1,4 +1,4 @@
-from pyndantic import BaseModel,Field,EmailStr
+from pydantic import BaseModel,Field,EmailStr
 
 class Baseseller(BaseModel):
     name:str
@@ -7,4 +7,4 @@ class SellerRead(Baseseller):
     pass
 
 class SellerCreate(Baseseller):
-    password: str
+    password: str = Field(..., min_length=1, max_length=72)
