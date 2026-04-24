@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+sqlalchemy
+aiosqlite
+pydantic-settings
+PyJWT
+bcrypt
+redis
+scalar-fastapi
+email-validator
