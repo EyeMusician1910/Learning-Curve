@@ -1,10 +1,11 @@
+from pathlib import Path
 from langgraph.graph import END, START, StateGraph, MessagesState
 from langchain_ollama import ChatOllama
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
 from langchain_core.messages import HumanMessage
 from util.langgraph_util import display
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 
 llm = ChatOllama(
@@ -63,25 +64,27 @@ workflow.add_edge(START, "agent")
 workflow.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})
 workflow.add_edge("tools","agent")
 
-checkpointer = MemorySaver()
-graph = workflow.compile(checkpointer=checkpointer)
+DB_PATH = Path(__file__).resolve().parent / "conversation.db"
+with SqliteSaver.from_conn_string(str(DB_PATH)) as checkpointer:
+    graph = workflow.compile(checkpointer=checkpointer)
 
-display(graph)
-config={"configurable":{"thread_id":"1"}}
-# First invoke - Get one restaurant recommendation
-response = graph.invoke(
-    {"messages": [HumanMessage(content="Can you recommend just one top restaurant in Munich? "
-                                       "The response should contain just the restaurant name")]},config)
+    display(graph)
+    config = {"configurable": {"thread_id": "1"}}
 
-# TODO: Extract the recommended restaurant
-recommended_restaurant = response["messages"][-1].content
-print(recommended_restaurant)
+    # First invoke - Get one restaurant recommendation
+    response = graph.invoke(
+        {"messages": [HumanMessage(content="Can you recommend just one top restaurant in Munich? "
+                                           "The response should contain just the restaurant name")]}, config)
 
-response = graph.invoke(
-    {"messages": [HumanMessage(content=f"Book a table at this restaurant")]},
-    config
-)
+    # TODO: Extract the recommended restaurant
+    recommended_restaurant = response["messages"][-1].content
+    print(recommended_restaurant)
 
-# TODO: Extract the recommended restaurant
-final_response = response["messages"][-1].content
-print(final_response)
+    response = graph.invoke(
+        {"messages": [HumanMessage(content=f"Book a table at this restaurant")]},
+        config
+    )
+
+    # TODO: Extract the recommended restaurant
+    final_response = response["messages"][-1].content
+    print(final_response)
