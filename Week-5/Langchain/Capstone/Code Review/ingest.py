@@ -7,22 +7,19 @@ if __name__ == "__main__":
     DATA_DIR = BASE_DIR / "data"
     DB_INDEX_PATH = BASE_DIR / "faiss_index"
 
-    # Ensure data directory exists
+    # Safety check for target data directories
     if not DATA_DIR.exists():
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        print(f"Created a blank 'data/' folder. Please drop your PDFs into: {DATA_DIR}")
+        print(f"Created blank data folder. Please drop your PDFs into: {DATA_DIR}")
         exit()
 
-    print("🚀 Starting High-Speed Data Ingestion Pipeline...")
+    print("🚀 Starting High-Speed Local Hybrid Data Ingestion Pipeline...")
     documents = lch.process_all_pdfs(DATA_DIR)
 
     if documents:
-        # This streams directly to your GPU via Ollama
-        db = lch.create_vector_store(documents)
-        
-        # Save the vectors locally to disk
-        db.save_local(str(DB_INDEX_PATH))
-        print(f"\n🎉 Success! Vector Database built and saved to disk at: {DB_INDEX_PATH}")
-        print("You can now safely run your Streamlit UI!")
+        # Calls the updated hybrid vector function from langchain_helper
+        lch.create_hybrid_vector_store(documents, str(DB_INDEX_PATH))
+        print(f"\n🎉 Success! Local Base Vector Index compiled at: {DB_INDEX_PATH}")
+        print("You can now safely run your UI dashboard layout using 'streamlit run main.py'!")
     else:
-        print(f"❌ Error: No PDF files found inside your data directory: {DATA_DIR}")
+        print(f"❌ Error: Please ensure you drop your PDF textbooks inside: {DATA_DIR}")
